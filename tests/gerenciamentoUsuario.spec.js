@@ -12,7 +12,6 @@ test.describe('Fluxo: Gerenciamento de Usuários', () => {
     await page.getByRole('button', { name: 'Entrar' }).click();
 
     // 2. Navega para a tela de Gerenciar Usuários
-    await page.getByLabel('Abrir menu').click();
     await page.getByText('Gerenciar Usuários').click();
 
     // 3. Aguarda a tela carregar completamente antes de liberar para os testes
