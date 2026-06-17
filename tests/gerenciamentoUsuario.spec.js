@@ -38,65 +38,74 @@ test.describe('Fluxo: Gerenciamento de Usuários', () => {
 
 // -------------------------------------------------------------------------
 
-  test('Deve abrir o modal e alterar a senha de um usuário', async ({ page }) => {
-    // Procura diretamente pelo atributo gerado pelo Tooltip do MUI
-    const btnAlterarSenha = page.locator('button[aria-label="Alterar Senha"]').first();
-    await btnAlterarSenha.click();
+test('Deve abrir o modal e alterar a senha de um usuário', async ({ page }) => {
+  const primeiraLinha = page.locator('table tbody tr').first();
+  await primeiraLinha.locator('button').nth(0).click(); // 1º botão = Alterar Senha
 
-    const modal = page.getByRole('dialog');
-    await expect(modal).toBeVisible();
-    
-    await page.getByLabel('Nova Senha').fill('novaSenha123');
-    await page.getByRole('button', { name: 'Salvar' }).click();
-    
-    await expect(modal).toBeHidden();
-  });
+  const modal = page.getByRole('dialog');
+  await expect(modal).toBeVisible();
+  
+  await page.getByLabel('Nova Senha').fill('novaSenha123');
+  await page.getByRole('button', { name: 'Salvar' }).click();
+  
+  await expect(modal).toBeHidden();
+});
 
-  // -------------------------------------------------------------------------
+test('Deve criar, inativar e verificar a remoção de um usuário', async ({ page }) => {
+  await page.getByText('Cadastrar Usuário').click();
+  
+  await page.locator('input[name="nome"]').fill('Usuário de Teste Temporário');
+  await page.locator('input[name="email"]').fill('teste_inativar@monsai.com');
+  await page.locator('input[name="cpf"]').fill('000.000.000-00'); // ajuste o CPF
+  await page.locator('input[name="senha"]').fill('senha123');
+  
+  // Seleciona o tipo — ajuste o seletor conforme o componente real
+// Abre o dropdown
+await page.locator('[name="tipoUsuario"]').click();
 
-  test('Deve inativar um usuário confirmando o alerta nativo', async ({ page }) => {
-    page.on('dialog', dialog => dialog.accept()); 
+// Clica na opção desejada no menu que aparece
+await page.getByRole('option', { name: 'CUIDADOR' }).click();
 
-    // Clica no botão de remover acesso que NÃO seja do utilizador logado
-    const btnRemover = page.locator('button[aria-label="Remover Acesso"]:not([disabled])').first();
-    await btnRemover.click();
-  });
+  await page.getByRole('button', { name: 'Finalizar Cadastro' }).click();
 
-  // -------------------------------------------------------------------------
+  // Aguarda o redirecionamento de volta pra lista
+  await expect(page.getByRole('heading', { name: 'Gerenciar Colaboradores' })).toBeVisible({ timeout: 10000 });
 
-  test('Deve vincular um idoso a um usuário do tipo Familiar', async ({ page }) => {
-    // ⚠️ ATENÇÃO: Tem de existir um 'FAMILIAR' na base de dados para isto funcionar!
-    const linhaFamiliar = page.locator('tr').filter({ hasText: 'FAMILIAR' }).first();
+  const linhaTeste = page.locator('tr').filter({ hasText: 'teste_inativar@monsai.com' });
+  await expect(linhaTeste).toBeVisible({ timeout: 10000 }); // garante que a linha apareceu antes de clicar
+  
+  page.on('dialog', dialog => dialog.accept());
+  await linhaTeste.locator('button').last().click();
 
-    // Caça o ícone exatamente pelo aria-label do Tooltip dentro daquela linha
-    await linhaFamiliar.locator('button[aria-label="Vincular idoso"]').click();
+  await expect(linhaTeste).toBeHidden({ timeout: 10000 });
+});
 
-    const modal = page.getByRole('dialog');
-    await expect(modal).toBeVisible();
+test('Deve vincular um idoso a um usuário do tipo Familiar', async ({ page }) => {
+  const linhaFamiliar = page.locator('tr').filter({ hasText: 'FAMILIAR' }).first();
+  await linhaFamiliar.locator('button').nth(1).click(); // 2º botão = Vincular idoso
 
-    await page.getByLabel('Selecione o Idoso').selectOption({ index: 1 });
-    await page.getByRole('button', { name: 'Confirmar' }).click();
-    
-    await expect(modal).toBeHidden();
-  });
+  const modal = page.getByRole('dialog');
+  await expect(modal).toBeVisible();
 
-  // -------------------------------------------------------------------------
+  await page.getByLabel('Selecione o Idoso').selectOption({ index: 1 });
+  await page.getByRole('button', { name: 'Confirmar' }).click();
+  
+  await expect(modal).toBeHidden();
+});
 
-  test('Deve desvincular um idoso de um usuário do tipo Familiar', async ({ page }) => {
-    page.on('dialog', dialog => dialog.accept());
+test('Deve desvincular um idoso de um usuário do tipo Familiar', async ({ page }) => {
+  page.on('dialog', dialog => dialog.accept());
 
-    const linhaFamiliar = page.locator('tr').filter({ hasText: 'FAMILIAR' }).first();
+  const linhaFamiliar = page.locator('tr').filter({ hasText: 'FAMILIAR' }).first();
+  await linhaFamiliar.locator('button').nth(2).click(); // 3º botão = Desvincular idoso
 
-    // Caça o ícone de quebrar o vínculo
-    await linhaFamiliar.locator('button[aria-label="Desvincular idoso"]').click();
+  const modal = page.getByRole('dialog');
+  await expect(modal).toBeVisible();
 
-    const modal = page.getByRole('dialog');
-    await expect(modal).toBeVisible();
+  await page.getByLabel('Idoso Vinculado').selectOption({ index: 1 });
+  await page.getByRole('button', { name: 'Desvincular' }).click();
 
-    await page.getByLabel('Idoso Vinculado').selectOption({ index: 1 });
-    await page.getByRole('button', { name: 'Desvincular' }).click();
-
-    await expect(modal).toBeHidden();
-  });
+  await expect(modal).toBeHidden();
+});
 
 });
