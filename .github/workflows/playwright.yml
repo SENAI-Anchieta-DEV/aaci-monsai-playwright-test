@@ -1,9 +1,9 @@
 name: Playwright Tests
 on:
   push:
-    branches: [ main, master ]
+    branches: [ main, master, AACI-365-tela-de-monitoramento]
   pull_request:
-    branches: [ main, master ]
+    branches: [ main, master, AACI-365-tela-de-monitoramento]
 jobs:
   test:
     timeout-minutes: 60
