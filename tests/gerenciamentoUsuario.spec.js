@@ -1,111 +1,125 @@
 import { test, expect } from '@playwright/test';
 
+// ─── Helper: login padrão ─────────────────────────────────────────────────────
+async function login(page) {
+  await page.goto('/');
+  await page.getByText('Sou Cliente').click();
+  await page.locator('input[type="text"]').fill('gestorpw1@monsai.com');
+  await page.locator('input[type="password"]').fill('123456');
+  await page.getByRole('button', { name: 'Entrar' }).click();
+  await expect(page.getByText('Autenticando...')).toBeHidden({ timeout: 10000 });
+}
+
+// ─── Helper: navegar para Gerenciar Usuários ──────────────────────────────────
+async function irParaGerenciar(page) {
+  await page.getByText('Gerenciar Usuários').click();
+  await expect(page.getByRole('heading', { name: 'Gerenciar Colaboradores' })).toBeVisible();
+  await expect(page.locator('.MuiCircularProgress-root')).toBeHidden({ timeout: 10000 });
+}
+
+// ─── Suite ────────────────────────────────────────────────────────────────────
 test.describe('Fluxo: Gerenciamento de Usuários', () => {
 
   test.beforeEach(async ({ page }) => {
-    await page.goto('/');
-    
-    // 1. Realiza o Login
-    await page.getByText('Sou Cliente').click();
-    await page.locator('input[type="text"]').fill('gestorpw@monsai.com');
-    await page.locator('input[type="password"]').fill('123456');
-    await page.getByRole('button', { name: 'Entrar' }).click();
-
-    // 2. Navega para a tela de Gerenciar Usuários
-    await page.getByText('Gerenciar Usuários').click();
-
-    // 3. Aguarda a tela carregar completamente antes de liberar para os testes
-    await expect(page.getByRole('heading', { name: 'Gerenciar Colaboradores' })).toBeVisible();
-    
-    // Aguarda o sumiço do spinner de carregamento (se existir)
-    await expect(page.locator('.MuiCircularProgress-root')).toBeHidden();
+    await login(page);
+    await irParaGerenciar(page);
   });
 
-  // -------------------------------------------------------------------------
-
+  // ── Listar ─────────────────────────────────────────────────────────────────
   test('Deve listar os cadastros na tabela', async ({ page }) => {
-    // Busca a tabela
     const tabela = page.locator('table');
     await expect(tabela).toBeVisible();
 
-    // No Playwright, verificamos a quantidade de elementos (linhas) assim:
     const linhas = page.locator('table tbody tr');
-    const quantidadeDeLinhas = await linhas.count();
-    
-    // Garante que existe pelo menos 1 linha na tabela
-    expect(quantidadeDeLinhas).toBeGreaterThan(0);
+    expect(await linhas.count()).toBeGreaterThan(0);
   });
 
-// -------------------------------------------------------------------------
+  // ── Alterar Senha ──────────────────────────────────────────────────────────
+  test('Deve abrir o modal e alterar a senha de um usuário', async ({ page }) => {
+    // Pega o botão pelo nome acessível (Tooltip title="Alterar Senha")
+    await page.getByRole('button', { name: 'Alterar Senha' }).first().click();
 
-test('Deve abrir o modal e alterar a senha de um usuário', async ({ page }) => {
-  const primeiraLinha = page.locator('table tbody tr').first();
-  await primeiraLinha.locator('button').nth(0).click(); // 1º botão = Alterar Senha
+    const modal = page.getByRole('dialog');
+    await expect(modal).toBeVisible();
 
-  const modal = page.getByRole('dialog');
-  await expect(modal).toBeVisible();
-  
-  await page.getByLabel('Nova Senha').fill('novaSenha123');
-  await page.getByRole('button', { name: 'Salvar' }).click();
-  
-  await expect(modal).toBeHidden();
-});
+    await page.getByLabel('Nova Senha').fill('novaSenha123');
+    await page.getByRole('button', { name: 'Salvar' }).click();
 
-test('Deve criar, inativar e verificar a remoção de um usuário', async ({ page }) => {
-  await page.getByText('Cadastrar Usuário').click();
-  
-  await page.locator('input[name="nome"]').fill('Usuário de Teste Temporário');
-  await page.locator('input[name="email"]').fill('teste_inativar@monsai.com');
-  await page.locator('input[name="cpf"]').fill('000.000.000-00'); // ajuste o CPF
-  await page.locator('input[name="senha"]').fill('senha123');
-  
-  // Seleciona o tipo — ajuste o seletor conforme o componente real
-// Abre o dropdown
-await page.locator('[name="tipoUsuario"]').click();
+    await expect(modal).toBeHidden();
+  });
 
-// Clica na opção desejada no menu que aparece
-await page.getByRole('option', { name: 'CUIDADOR' }).click();
+  // ── Criar → Inativar ────────────────────────────────────────────────────────
+  test('Deve criar, inativar e verificar a remoção de um usuário', async ({ page }) => {
+    // Gera e-mail único por execução para não colidir com dados existentes
+    const email = `teste.${Date.now()}@monsai.com`;
 
-  await page.getByRole('button', { name: 'Finalizar Cadastro' }).click();
+    // 1. Navega para o cadastro
+    await page.getByText('Cadastrar Usuário').click();
+    await expect(page.getByRole('heading', { name: 'Novo Colaborador' })).toBeVisible();
 
-  // Aguarda o redirecionamento de volta pra lista
-  await expect(page.getByRole('heading', { name: 'Gerenciar Colaboradores' })).toBeVisible({ timeout: 10000 });
+    // 2. Preenche o formulário
+    await page.getByLabel('Nome Completo').fill('Usuário Temporário Playwright');
+    await page.getByLabel('CPF').fill('529.982.247-25'); // CPF válido reservado para testes
+    await page.getByLabel('E-mail').fill(email);
+    await page.getByLabel('Senha Provisória').fill('senha123');
 
-  const linhaTeste = page.locator('tr').filter({ hasText: 'teste_inativar@monsai.com' });
-  await expect(linhaTeste).toBeVisible({ timeout: 10000 }); // garante que a linha apareceu antes de clicar
-  
-  page.on('dialog', dialog => dialog.accept());
-  await linhaTeste.locator('button').last().click();
+    // MUI Select com MenuItem — clicar no campo e depois na opção
+    await page.getByLabel('Tipo de Acesso').click();
+    await page.getByRole('option', { name: 'CUIDADOR' }).click();
 
-  await expect(linhaTeste).toBeHidden({ timeout: 10000 });
-});
+    // 3. Submete
+    const [response] = await Promise.all([
+      page.waitForResponse((res) => res.url().includes('/usuarios') && res.ok()),
+      page.getByRole('button', { name: 'Finalizar Cadastro' }).click(),
+    ]);
+    expect(response.ok()).toBeTruthy();
 
-test('Deve vincular um idoso a um usuário do tipo Familiar', async ({ page }) => {
-  const linhaFamiliar = page.locator('tr').filter({ hasText: 'FAMILIAR' }).first();
-  await linhaFamiliar.locator('button').nth(1).click(); // 2º botão = Vincular idoso
+    // 4. Volta para Gerenciar Usuários (CadastrarUsuario não redireciona sozinho)
+    await irParaGerenciar(page);
 
-  const modal = page.getByRole('dialog');
-  await expect(modal).toBeVisible();
+    // 5. Localiza a linha pelo e-mail único e remove o acesso
+    const linhaTeste = page.locator('tr').filter({ hasText: email });
+    await expect(linhaTeste).toBeVisible({ timeout: 10000 });
 
-  await page.getByLabel('Selecione o Idoso').selectOption({ index: 1 });
-  await page.getByRole('button', { name: 'Confirmar' }).click();
-  
-  await expect(modal).toBeHidden();
-});
+    page.on('dialog', (dialog) => dialog.accept());
+    await linhaTeste.getByRole('button', { name: 'Remover Acesso' }).click();
 
-test('Deve desvincular um idoso de um usuário do tipo Familiar', async ({ page }) => {
-  page.on('dialog', dialog => dialog.accept());
+    // 6. Linha deve sumir da tabela
+    await expect(linhaTeste).toBeHidden({ timeout: 10000 });
+  });
 
-  const linhaFamiliar = page.locator('tr').filter({ hasText: 'FAMILIAR' }).first();
-  await linhaFamiliar.locator('button').nth(2).click(); // 3º botão = Desvincular idoso
+  // ── Vincular Idoso ─────────────────────────────────────────────────────────
+  test('Deve vincular um idoso a um usuário do tipo Familiar', async ({ page }) => {
+    // ⚠️ Precisa existir um FAMILIAR no banco para este teste funcionar
+    const linhaFamiliar = page.locator('tr').filter({ hasText: 'FAMILIAR' }).first();
+    await expect(linhaFamiliar).toBeVisible();
 
-  const modal = page.getByRole('dialog');
-  await expect(modal).toBeVisible();
+    await linhaFamiliar.getByRole('button', { name: 'Vincular idoso' }).click();
 
-  await page.getByLabel('Idoso Vinculado').selectOption({ index: 1 });
-  await page.getByRole('button', { name: 'Desvincular' }).click();
+    const modal = page.getByRole('dialog');
+    await expect(modal).toBeVisible();
 
-  await expect(modal).toBeHidden();
-});
+    await page.getByLabel('Selecione o Idoso').selectOption({ index: 1 });
+    await page.getByRole('button', { name: 'Confirmar' }).click();
+
+    await expect(modal).toBeHidden();
+  });
+
+  // ── Desvincular Idoso ──────────────────────────────────────────────────────
+  test('Deve desvincular um idoso de um usuário do tipo Familiar', async ({ page }) => {
+    // ⚠️ Precisa existir um FAMILIAR com idoso vinculado no banco
+    const linhaFamiliar = page.locator('tr').filter({ hasText: 'FAMILIAR' }).first();
+    await expect(linhaFamiliar).toBeVisible();
+
+    await linhaFamiliar.getByRole('button', { name: 'Desvincular idoso' }).click();
+
+    const modal = page.getByRole('dialog');
+    await expect(modal).toBeVisible();
+
+    await page.getByLabel('Idoso Vinculado').selectOption({ index: 1 });
+    await page.getByRole('button', { name: 'Desvincular' }).click();
+
+    await expect(modal).toBeHidden();
+  });
 
 });
